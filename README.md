@@ -18,9 +18,6 @@ The SSH reverse tunnel establishes a secure and persistent connection from your 
 
 This approach allows you to remotely manage your device, bypassing firewalls or restrictive network configurations that would usually block inbound SSH access.
 
-## Diagram
-
-Below is a simplified diagram to illustrate the SSH reverse tunnel setup and connection flow:
 
 ```plaintext
                                   ┌───────────┐
@@ -43,90 +40,108 @@ Below is a simplified diagram to illustrate the SSH reverse tunnel setup and con
                                 └────────────────┘
 ```
 
+Above is a simplified diagram to illustrate the SSH reverse tunnel setup and connection flow:
+
+1. The Raspberry Pi is placed in a private network (e.g., behind a NAT or firewall) and initiates an SSH connection to a remote server with a publicly accessible IP address (the rendezvous server).
+2. The Client (your device) connects to the rendezvous server, which forwards the connection to the Raspberry Pi through the established SSH tunnel.
 
 
-### Installation
+## Setup
 
-#### Rendezvous Server
+Throughout the setup, we refer to three main components:
 
-1. Install and configure SSH server on the rendezvous server
-1. Add the following lines to the `sshd_config` file on the rendezvous server:
-    ```
+- **Rendezvous Server**: This is the remote server with a public IP address that acts as a bridge for SSH connections. It allows secure access to devices located behind firewalls or NAT. The user account on this server is referred to as `RDV_USER`.
+
+- **Raspberry Pi (RPi)**: This is the local device that you want to access remotely. It connects to the rendezvous server to establish the reverse SSH tunnel. The default user account on the Raspberry Pi is typically `pi`.
+
+- **Client**: This is the device you use to connect to the Raspberry Pi remotely. It could be your laptop, desktop, or any device with an SSH client.
+
+
+### Rendezvous Server
+
+1. Install and configure the SSH server on the rendezvous server.
+2. Add the following lines to the `sshd_config` file on the rendezvous server:
+    ```bash
     GatewayPorts yes
     AllowTcpForwarding yes
     ```
-1. It is recommended to also add the following lines to the `sshd_config` file on the rendezvous server:
-    ```
+3. It is recommended to also add the following lines to the `sshd_config` file on the rendezvous server for enhanced security:
+    ```bash
     PublicKeyAuthentication yes
     PasswordAuthentication no
     ```
-1. Restart the SSH server on the rendezvous server
+4. Restart the SSH server on the rendezvous server to apply the changes:
+    ```bash
+    sudo systemctl restart ssh
+    ```
 
-#### RPi
+5. (Optional) You may want to point a domain (e.g. `rdv.example.com`) to the public IP address of the rendezvous server. If your rendezvous server has a dynamic IP address, consider using a dynamic DNS service to ensure you can always reach it.
 
-Install and configure SSH server on the RPi
+### Raspberry Pi (RPi)
 
-Generate an SSH key pair on the RPi
+1. Install and configure the SSH server on the RPi if it’s not already installed:
+    ```bash
+    sudo apt update
+    sudo apt install openssh-server
+    ```
 
-```bash
-ssh-keygen -t rsa -b 4096 -f /home/pi/.ssh/id_rsa
-```
+2. Generate an SSH key pair on the RPi:
+    ```bash
+    ssh-keygen -t rsa -b 4096 -f /home/pi/.ssh/id_rsa
+    ```
+    - Make sure to set a password for the private key and save it into a file that is only readable by root:
+    ```bash
+    sudo su
+    echo "your_password" > /root/ssh.secret
+    chmod 600 /root/ssh.secret
+    ```
 
-- Do set a password for the private key and save it into a file only readable by root
+3. Add the public key to the `authorized_keys` file on the rendezvous server (this can be done by copying the public key contents from the RPi):
+    ```bash
+    ssh-copy-id -i /home/pi/.ssh/id_rsa.pub RDV_USER@RDV_DOMAIN
+    ```
+    - Restart the SSH server on the rendezvous server:
+    ```bash
+    sudo systemctl restart ssh
+    ```
 
-```bash 
-sudo su
-echo "password" > /root/ssh.secret
-chmod 600 /root/ssh.secret
-```
+4. Copy `rtunnel.sh` to the RPi and adapt the variables in the script:
+    - Set `SSH_PW_FILE` to the file containing the password for the private key:
+    ```bash
+    SSH_PW_FILE="/root/ssh.secret"
+    SSH_PRIVATE_KEY="/home/pi/.ssh/id_rsa"
+    ```
+    - Set `RDV_USER`, `RDV_DOMAIN`, and `RDV_PORT` to the user, domain, and port of the rendezvous server's SSH server:
+    ```bash
+    RDV_USER="ubuntu"
+    RDV_DOMAIN="rdv.example.com"
+    RDV_PORT=22
+    ```
+    - Set `AVAILABLE_PORT` to the port on the rendezvous server where the RPi's SSH server should be available:
+    ```bash
+    AVAILABLE_PORT=2022
+    ```
 
-Add the public key to the `authorized_keys` file on the Rendezvous server and restart the SSH server
+5. Copy `rtunnel.service` to `/etc/systemd/system/` and adapt the path to the `rtunnel.sh` script:
+    ```bash
+    ExecStart=/root/rtunnel.sh
+    ```
 
-Copy `rtunnel.sh` to the RPi and adapt the variables in the script
+6. Enable and start the service:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable rtunnel
+    sudo systemctl start rtunnel
+    ```
 
-- set `SSH_PW_FILE` to the file containing the password for the private key
-- set `SSH_PRIVATE_KEY` to the private key file
+7. Add your personal SSH key to the `authorized_keys` file on the RPi.
 
-```bash
-SSH_PW_FILE="/root/ssh.secret"
-SSH_PRIVATE_KEY="/home/pi/.ssh/id_rsa"
-```
+8. Finally, connect to the RPi via the rendezvous server using:
+    ```bash
+    ssh -p 2022 pi@rdv.example.com
+    ```
 
-- set `RDV_USER`, `RDV_DOMAIN`, and `RDV_PORT` to the user, domain, and port of the rendezvous server's SSH server
-
-```bash
-RDV_USER="ubuntu"
-RDV_DOMAIN="rdv.example.com"
-RDV_PORT=22
-```
-
-- set `AVAILABLE_PORT` to the port on the rendezvous server where the RPi's SSH server should be available
-
-```bash
-AVAILABLE_PORT=2022
-```
-
-Copy `rtunnel.service` to `/etc/system/systemd/` and adapt the path to the `rtunnel.sh` script.
-
-```bash
-ExecStart=/root/rtunnel.sh
-```
-
-Enable and start the service
-
-```bash
-systemctl daemon-reload
-systemctl enable rtunnel
-systemctl start rtunnel
-```
-
-Add your personal SSH key to the `authorized_keys` file on the RPi
-
-Connect to the RPi via the rendezvous server
-
-```bash
-ssh -p 2022 pi@rdv.example.com
-```
+Below is a diagram illustrating the connection with the ports used in the above setup:
 
 ```plaintext
 Private Network   |         Internet         |     Private Network
