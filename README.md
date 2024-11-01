@@ -1,15 +1,9 @@
 
 
-## Reverse SSH Tunnel
-
-### Motivation
+# Reverse SSH Tunnel
 
 This repository contains everything you need to set up an SSH reverse tunnel, enabling remote access to a device from anywhere in the world. By installing it on a Raspberry Pi (or any similar device), you can seamlessly connect to the device via SSH without needing to configure the network it’s in. Simply drop the Raspberry Pi into any network, and it will automatically establish a secure, persistent connection, making it accessible remotely—perfect for managing IoT devices, remote servers, or any device on a dynamic network.
 
-### How does it work?
-
-The RPi connects to a rendezvous server via SSH and makes its own SSH server available on a port of the rendezvous server.
-The client connects to the specific port on the rendezvous server where the RPi's SSH server is available and is forwarded to the RPi.
 ## How It Works
 
 The SSH reverse tunnel establishes a secure and persistent connection from your Raspberry Pi (or any configured device) to a remote server. Here’s how it operates:
@@ -28,20 +22,27 @@ This approach allows you to remotely manage your device, bypassing firewalls or 
 
 Below is a simplified diagram to illustrate the SSH reverse tunnel setup and connection flow:
 
-
-
 ```plaintext
-Private Network   |         Internet         |     Private Network
-                  |                          |   
-    +---------+   |       +------------+     |     +---------------+
-    |  RPi    |   |       | RDV        |     |     |  Client       |
-    |         |   |       |            |     |     |               |
-    |     ssh | --|-----> |- 22  2022 -| <---|---- | ssh RDV:2022  |
-    |- 22     |   |       |            |     |     |  pi@RPi$>     |
-    |         |   |       |            |     |     |               |
-    +---------+   |       +------------+     |     +---------------+
-
+                                  ┌───────────┐
+                                  │ Raspberry │
+           Private Network        │    Pi     │
+                                  └───────────┘
+                                       │
+                  ──────────────────────────────
+                        NAT / Firewall |
+                  ──────────────────────────────
+                                       │
+                                  SSH Tunnel 
+           Public Network       (Port Forwarding)
+                                       │
+                                       V
+  ┌─────────────┐               ┌────────────────┐
+  │ Your Device │   SSH Access  │  Rendezvous    │
+  │  (Laptop)   │  ───────────> │  Server        │
+  └─────────────┘   to RPi      │ (Public IP)    │
+                                └────────────────┘
 ```
+
 
 
 ### Installation
@@ -102,7 +103,7 @@ RDV_PORT=22
 - set `AVAILABLE_PORT` to the port on the rendezvous server where the RPi's SSH server should be available
 
 ```bash
-AVAILABLE_PORT=35722
+AVAILABLE_PORT=2022
 ```
 
 Copy `rtunnel.service` to `/etc/system/systemd/` and adapt the path to the `rtunnel.sh` script.
@@ -124,7 +125,20 @@ Add your personal SSH key to the `authorized_keys` file on the RPi
 Connect to the RPi via the rendezvous server
 
 ```bash
-ssh -p <AVAILABLE_PORT> pi@<RDV_DOMAIN>
+ssh -p 2022 pi@rdv.example.com
+```
+
+```plaintext
+Private Network   |         Internet         |     Private Network
+                  |                          |   
+    +---------+   |       +------------+     |     +---------------+
+    |  RPi    |   |       | RDV        |     |     |  Client       |
+    |         |   |       |            |     |     |               |
+    |     ssh | --|-----> |- 22  2022 -| <---|---- | ssh RDV:2022  |
+    |- 22     |   |       |            |     |     |  pi@RPi$>     |
+    |         |   |       |            |     |     |               |
+    +---------+   |       +------------+     |     +---------------+
+
 ```
 
 ## FAQ
