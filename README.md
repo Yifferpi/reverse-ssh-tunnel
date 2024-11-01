@@ -152,3 +152,11 @@ Yes, the RPi can be behind a NAT. As long as the RPi and your personal machine c
 Yes, the rendezvous server can be behind a NAT. In that case, a Port Forwarding rule has to be set up for the RPi to reach the rendezvous server. Configuring a dynamic DNS service is also recommended.
 
 
+## Ethics and Responsibility Disclaimer
+
+This tool is for **authorized** remote access only. Please make sure you have explicit permission before setting up this device in any network.
+
+We don’t take responsibility for any misuse. Don’t be that person—use this tool responsibly and ethically.
+
+---
+
